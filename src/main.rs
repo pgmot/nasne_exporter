@@ -31,17 +31,22 @@ async fn main() {
         panic!("require DEVICE_IP_ADDRS");
     }
 
+    let port = match env::var("PORT") {
+        Ok(val) => val.parse().unwrap(),
+        Err(_) => 8100,
+    };
+
     let builder = PrometheusBuilder::new();
     builder
         .idle_timeout(
             MetricKindMask::COUNTER | MetricKindMask::HISTOGRAM,
             Some(Duration::from_secs(10)),
         )
-        .with_http_listener(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8100))
+        .with_http_listener(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port))
         .install()
         .expect("failed to install Prometheus recorder");
 
-    println!("start server 0.0.0.0:8100");
+    println!("start server 0.0.0.0:{}", port);
 
     loop {
         for ip_addr in &device_ip_addrs {
