@@ -1,8 +1,8 @@
-FROM rust:1.58.1
+FROM rust:slim
 
 WORKDIR /app
 
-ENV OPENSSL_VERSION=1.1.1m
+ENV OPENSSL_VERSION=1.1.1s
 ENV OPENSSL_LIB_DIR=/tmp/openssl-${OPENSSL_VERSION}
 ENV OPENSSL_INCLUDE_DIR=/tmp/openssl-${OPENSSL_VERSION}/include
 
@@ -12,7 +12,7 @@ ENV CC=arm-linux-gnueabihf-gcc
 
 RUN \
   apt-get update && \
-  apt-get install -y gcc-arm-linux-gnueabihf wget
+  apt-get install -y gcc-arm-linux-gnueabihf wget build-essential perl
 
 RUN \
   cd /tmp && \
