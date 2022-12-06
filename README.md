@@ -12,9 +12,7 @@
 
 # for raspberry pi
 
-armv7
-
 ```
-$ docker build -t cross-for-pi .
-$ docker run -it -v "$PWD":/app cross-for-pi
+rustup target add aarch64-unknown-linux-gnu
+cargo build --target aarch64-unknown-linux-gnu --release
 ```

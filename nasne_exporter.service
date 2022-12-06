@@ -1,0 +1,12 @@
+[Unit]
+Description = nasne exporter
+
+[Service]
+ExecStart = /usr/local/bin/nasne_exporter
+Restart = always
+Type = simple
+Environment=DEVICE_IP_ADDRS=xxx.xxx.xxx.xxx,yyy.yyy.yyy.yyy
+Environment=PORT=8100
+
+[Install]
+WantedBy = multi-user.target
