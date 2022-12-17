@@ -1,9 +1,5 @@
 # nasne_exporter
 
-## env
-
-- `DEVICE_IP_ADDRS`: set the IP address of nasne separated by commas
-
 ## features
 
 - `nasne_total_volume_size`

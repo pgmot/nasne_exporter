@@ -1,77 +1,65 @@
-macro_rules! skip_fail {
-    ($res:expr) => {
-        match $res {
-            Ok(val) => val,
-            Err(e) => {
-                println!("An error: {}; skipped.", e);
-                continue;
-            }
-        }
-    };
-}
-
+use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use anyhow::Result;
-use metrics::gauge;
-use metrics_exporter_prometheus::PrometheusBuilder;
-use metrics_util::MetricKindMask;
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::time::Duration;
+use string_builder::Builder;
 
-#[tokio::main]
-async fn main() {
-    let device_ip_addrs: Vec<String> = env::var("DEVICE_IP_ADDRS")
-        .expect("require DEVICE_IP_ADDRS")
-        .split(",")
-        .map(|s| s.to_string())
-        .collect();
-
-    if device_ip_addrs.len() == 0 {
-        panic!("require DEVICE_IP_ADDRS");
-    }
-
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
     let port = match env::var("PORT") {
         Ok(val) => val.parse().unwrap(),
         Err(_) => 8100,
     };
 
-    let builder = PrometheusBuilder::new();
-    builder
-        .idle_timeout(
-            MetricKindMask::COUNTER | MetricKindMask::HISTOGRAM,
-            Some(Duration::from_secs(10)),
-        )
-        .with_http_listener(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port))
-        .install()
-        .expect("failed to install Prometheus recorder");
+    println!("listen 0.0.0.0:{}", port);
 
-    println!("start server 0.0.0.0:{}", port);
+    HttpServer::new(|| App::new().service(metrics))
+        .bind(("0.0.0.0", port))?
+        .run()
+        .await
+}
 
-    loop {
-        for ip_addr in &device_ip_addrs {
-            let box_name = skip_fail!(get_box_name(&ip_addr).await);
-            let hdd_info = skip_fail!(get_hdd_info(&ip_addr).await);
+#[derive(Deserialize, Debug)]
+struct MetricsQuery {
+    target: String,
+}
 
-            gauge!(
-                "nasne_total_volume_size",
-                hdd_info.hdd.total_volume_size as f64,
-                "name" => box_name.name.clone(),
-            );
-            gauge!(
-                "nasne_free_volume_size",
-                hdd_info.hdd.free_volume_size as f64,
-                "name" => box_name.name.clone(),
-            );
-            gauge!(
-                "nasne_used_volume_size",
-                hdd_info.hdd.used_volume_size as f64,
-                "name" => box_name.name.clone(),
-            );
+#[get("/metrics")]
+async fn metrics(query: web::Query<MetricsQuery>) -> impl Responder {
+    let box_name = match get_box_name(&query.target).await {
+        Ok(x) => x,
+        Err(_) => {
+            return HttpResponse::BadRequest().body(format!("failed to connect {}", query.target))
         }
+    };
+    let hdd_info = match get_hdd_info(&query.target).await {
+        Ok(x) => x,
+        Err(_) => {
+            return HttpResponse::BadRequest().body(format!("failed to connect {}", query.target))
+        }
+    };
 
-        std::thread::sleep(Duration::from_secs(10));
-    }
+    let mut str_builder = Builder::default();
+    str_builder.append("# TYPE nasne_total_volume_size gauge\n");
+    str_builder.append(format!(
+        "nasne_total_volume_size{{name=\"{}\"}} {}\n\n",
+        box_name.name.clone(),
+        hdd_info.hdd.total_volume_size
+    ));
+    str_builder.append("# TYPE nasne_free_volume_size gauge\n");
+    str_builder.append(format!(
+        "nasne_free_volume_size{{name=\"{}\"}} {}\n\n",
+        box_name.name.clone(),
+        hdd_info.hdd.free_volume_size
+    ));
+    str_builder.append("# TYPE nasne_used_volume_size gauge\n");
+    str_builder.append(format!(
+        "nasne_used_volume_size{{name=\"{}\"}} {}\n\n",
+        box_name.name.clone(),
+        hdd_info.hdd.used_volume_size
+    ));
+
+    HttpResponse::Ok().body(str_builder.string().unwrap())
 }
 
 async fn do_get(ip_addr: &str, endpoint: &str) -> Result<String> {
